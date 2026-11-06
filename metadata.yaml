@@ -1,0 +1,21 @@
+name: astrbot_plugin_sanguosha
+display_name: 三国杀单挑
+short_desc: 三国杀 1v1 文字对局：发「/三国杀」开局，回数字出牌、字母放技能
+desc: >-
+  纯本地结算的三国杀 1v1 文字局，不消耗模型 token。
+  用法：发「/三国杀」开局 → 回 1/2/3 选将 → 回数字出牌、回字母 A/B/C 发技能、回 0 结束出牌、回「？」看技能说明，锦囊结算前会先问你无懈可击，
+  「重开」重开一局、「/结束」强制收摊。
+  含 108 张牌堆、真实判定、装备防具效果与 22 名界包武将技能。
+version: 1.4.0
+author: 鲸鱼
+repo: https://github.com/
+astrbot_version: ">=4.10"
+support_platforms:
+  - aiocqhttp
+  - telegram
+  - discord
+  - qq_official
+tags:
+  - 游戏
+  - 三国杀
+  - 文字游戏

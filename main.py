@@ -20,10 +20,9 @@ import time
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
-from astrbot.api.star import Context, Star, register
-# 新增：用于临时注入上下文的 TextPart 和 获取数据目录的 StarTools
-from astrbot.api.message import TextPart  
-from astrbot.api.star import StarTools
+from astrbot.api.star import Context, Star, StarTools, register
+# 修正：使用 AstrBot 标准的 Plain 消息组件，避免报错
+from astrbot.api.message_components import Plain
 
 from .engine import Game, START_WORDS, looks_like_input
 from .heroes import load_hero_packs
@@ -85,7 +84,8 @@ def strip_slash(text: str) -> str:
     return t
 
 
-@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局", "1.4.1")
+# 修改：版本号更新为 1.4.2
+@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局（省 token 版 + AI 人格联动 + 武将包）", "1.4.2")
 class SanguoshaPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -261,9 +261,9 @@ class SanguoshaPlugin(Star):
             "5. 不要暴露自己是 AI，不要提「prompt」「system」之类。\n"
         )
         
-        # 修改：官方推荐的方式，使用 TextPart 并标记为临时，避免破坏缓存
+        # 修正：使用 Plain 组件，并标记为临时，避免破坏缓存
         req.extra_user_content_parts.append(
-            TextPart(text=inject).mark_as_temp()
+            Plain(text=inject).make_as_temp()
         )
 
     # ─────────────────────────────────────────────

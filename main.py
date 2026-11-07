@@ -85,8 +85,7 @@ def strip_slash(text: str) -> str:
     return t
 
 
-# 修改：版本号从 1.9.0 改为 1.4.0，与 metadata.yaml 保持一致
-@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局（省 token 版 + AI 人格联动 + 武将包）", "1.4.0")
+@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局", "1.4.1")
 class SanguoshaPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)

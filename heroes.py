@@ -3,6 +3,8 @@
 
 import os
 import json
+# 引入 AstrBot 的 logger 模块
+from astrbot.api import logger
 
 D = "锁定技"
 
@@ -103,7 +105,8 @@ def _load_one_pack(path: str) -> int:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception as e:
-        print(f"[三国杀][武将包] 读取失败 {path}: {e}")
+        # 修改：print 改为 logger.warning
+        logger.warning(f"[三国杀][武将包] 读取失败 {path}: {e}")
         return 0
 
     added = 0
@@ -120,14 +123,16 @@ def _load_one_pack(path: str) -> int:
         hp = h.get("hp")
         skills = h.get("s")
         if not name or not isinstance(hp, int) or not isinstance(skills, list):
-            print(f"[三国杀][武将包] {pack_name} 字段不全，跳过: {h}")
+            # 修改：print 改为 logger.warning
+            logger.warning(f"[三国杀][武将包] {pack_name} 字段不全，跳过: {h}")
             continue
 
         norm_skills = []
         bad = False
         for s in skills:
             if not isinstance(s, (list, tuple)) or len(s) != 3:
-                print(f"[三国杀][武将包] {name} 技能格式错误: {s}")
+                # 修改：print 改为 logger.warning
+                logger.warning(f"[三国杀][武将包] {name} 技能格式错误: {s}")
                 bad = True
                 break
             norm_skills.append((str(s[0]), str(s[1]), str(s[2])))
@@ -136,17 +141,20 @@ def _load_one_pack(path: str) -> int:
 
         for cn, _timing, key in norm_skills:
             if key not in ENGINE_SKILL_KEYS:
-                print(f"[三国杀][武将包] 警告：{name} 的技能「{cn}」({key}) 未登记描述")
+                # 修改：print 改为 logger.warning
+                logger.warning(f"[三国杀][武将包] 警告：{name} 的技能「{cn}」({key}) 未登记描述")
 
         hero = {"n": str(name), "hp": int(hp), "g": str(h.get("g", "M")), "s": norm_skills}
 
         existing_idx = next((i for i, x in enumerate(HEROES) if x["n"] == hero["n"]), -1)
         if existing_idx >= 0:
             HEROES[existing_idx] = hero
-            print(f"[三国杀][武将包] 覆盖武将: {hero['n']}（来自 {pack_name}）")
+            # 修改：print 改为 logger.info
+            logger.info(f"[三国杀][武将包] 覆盖武将: {hero['n']}（来自 {pack_name}）")
         else:
             HEROES.append(hero)
-            print(f"[三国杀][武将包] 新增武将: {hero['n']}（来自 {pack_name}）")
+            # 修改：print 改为 logger.info
+            logger.info(f"[三国杀][武将包] 新增武将: {hero['n']}（来自 {pack_name}）")
         added += 1
     return added
 
@@ -161,5 +169,6 @@ def load_hero_packs(*dirs: str) -> int:
                 continue
             total += _load_one_pack(os.path.join(d, fn))
     if total:
-        print(f"[三国杀][武将包] 加载完成，共 {total} 个武将，当前总武将数 {len(HEROES)}")
+        # 修改：print 改为 logger.info
+        logger.info(f"[三国杀][武将包] 加载完成，共 {total} 个武将，当前总武将数 {len(HEROES)}")
     return total

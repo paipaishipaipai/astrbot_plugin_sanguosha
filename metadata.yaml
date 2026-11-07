@@ -6,7 +6,7 @@ desc: >-
   用法：发「/三国杀」开局 → 回 1/2/3 选将 → 回数字出牌、回字母 A/B/C 发技能、回 0 结束出牌、回「？」看技能说明，锦囊结算前会先问你无懈可击，
   「重开」重开一局、「/结束」强制收摊。
   含 108 张牌堆、真实判定、装备防具效果与 30 武将技能(后续还会加)。
-version: 1.4.1
+version: 1.4.2
 author: 派派
 repo: https://github.com/paipaishipaipai/astrbot_plugin_sanguosha
 astrbot_version: ">=4.10"

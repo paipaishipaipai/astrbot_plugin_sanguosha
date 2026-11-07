@@ -6,13 +6,11 @@
 对局中：回数字出牌 / 字母用技能 / 0 结束出牌
 强制收摊：「/结束」「/退出三国杀」「三国杀结束」
 游戏外：直接和 AI 聊天，AI 会自动"看到"当前牌局并陪你聊
-不过这个效果好像不是很理想...
 
 会话隔离：
 - 游戏内出牌结果：不走 LLM，直接拼字符串，不进聊天历史
 - AI 主动台词：走独立 session（{origin}__sgs_speak），不污染聊天历史
 - 玩家游戏外聊天：走默认 session，AI 通过 on_llm_request 看到牌局摘要
-
 """
 
 import os
@@ -23,6 +21,9 @@ from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, register
+# 新增：用于临时注入上下文的 TextPart 和 获取数据目录的 StarTools
+from astrbot.api.message import TextPart  
+from astrbot.api.star import StarTools
 
 from .engine import Game, START_WORDS, looks_like_input
 from .heroes import load_hero_packs
@@ -36,7 +37,6 @@ END_REPLY = "行，牌收起来了，这局算你喊停 🔚 想再打就发「/
 NO_GAME_REPLY = "现在没开局啊，牌堆都是干净的。想打就发「/三国杀」"
 
 SLASHES = "/／"
-TIMING_LOG = "/root/data/plugin_data/sanguosha_timing.log"
 
 # 高优先级事件：胜负/濒死，无视冷却，立刻说
 SPEAK_URGENT = ("you_win", "me_win", "you_dying", "me_dying")
@@ -65,7 +65,11 @@ SELF_TALK_SUFFIX = "__sgs_speak"
 
 def _write_timing(tag: str, text: str, cost_ms: float):
     try:
-        with open(TIMING_LOG, "a", encoding="utf-8") as f:
+        # 修改：使用 StarTools 动态获取数据目录，避免硬编码 /root 导致权限报错
+        data_dir = StarTools.get_data_dir("sanguosha")
+        log_path = os.path.join(str(data_dir), "sanguosha_timing.log")
+        
+        with open(log_path, "a", encoding="utf-8") as f:
             f.write(
                 f"{time.strftime('%m-%d %H:%M:%S')} {tag} "
                 f"{cost_ms:.1f}ms len={len(text)}\n"
@@ -81,7 +85,8 @@ def strip_slash(text: str) -> str:
     return t
 
 
-@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局（省 token 版 + AI 人格联动 + 武将包）", "1.9.0")
+# 修改：版本号从 1.9.0 改为 1.4.0，与 metadata.yaml 保持一致
+@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局（省 token 版 + AI 人格联动 + 武将包）", "1.4.0")
 class SanguoshaPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -100,7 +105,6 @@ class SanguoshaPlugin(Star):
         builtin = os.path.join(here, "hero_packs")
         user = None
         try:
-            from astrbot.api.star import StarTools
             user = os.path.join(str(StarTools.get_data_dir("sanguosha")), "hero_packs")
         except Exception:
             user = None
@@ -257,7 +261,11 @@ class SanguoshaPlugin(Star):
             "不要复述原文格式。\n"
             "5. 不要暴露自己是 AI，不要提「prompt」「system」之类。\n"
         )
-        req.system_prompt = (req.system_prompt or "") + inject
+        
+        # 修改：官方推荐的方式，使用 TextPart 并标记为临时，避免破坏缓存
+        req.extra_user_content_parts.append(
+            TextPart(text=inject).mark_as_temp()
+        )
 
     # ─────────────────────────────────────────────
     # 内部：获取当前会话的人格 system_prompt

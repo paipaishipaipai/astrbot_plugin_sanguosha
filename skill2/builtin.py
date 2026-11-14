@@ -1,4 +1,3 @@
-# 【防吞提示】粘贴后请直接删掉这一行！
 # -*- coding: utf-8 -*-
 """skill2 内置技能：所有技能集中写在本文件。"""
 
@@ -183,6 +182,14 @@ class Zhiyi:
             }
             api.say("◆ 执义　本回合使用过基本牌,可发动:回 牌序号+空格+类型(s=杀,t=桃,j=酒,f=火杀,l=雷杀),如 1 s,0=不发动")
             return True
+        elif api.game.is_pvp:
+            st["pending"] = {
+                "t": "zhiyi_opt",
+                "next_turn": next_who,
+                "who": api.who,
+            }
+            api.say("◆ 执义　本回合使用过基本牌,可发动:回 牌序号+空格+类型(s=杀,t=桃,j=酒,f=火杀,l=雷杀),如 1 s,0=不发动")
+            return True
         else:
             self._ai_execute(api, next_who)
             return True
@@ -360,6 +367,11 @@ class Zhiji:
             st["pending"] = {"t": "zhiji_opt", "who": "you"}
             api.say("◆ 志继　觉醒技：你没有手牌。1=回复1点体力 2=摸两张牌")
             return True
+        elif api.game.is_pvp:
+            st = api.state
+            st["pending"] = {"t": "zhiji_opt", "who": api.who}
+            api.say("◆ 志继　觉醒技：你没有手牌。1=回复1点体力 2=摸两张牌")
+            return True
         else:
             if me["hp"] < me["maxhp"]:
                 me["hp"] += 1
@@ -419,8 +431,13 @@ class Tiaoxin:
             
         api.me["tiaoxin_used"] = True
         api.say("◆ 挑衅　你发动挑衅，令对手对你使用一张杀，否则弃置其一张牌")
-        sha_c, sha_desc = api.game._ai_find_sha()
         can_hit = distance(me, you) <= attack_range(me)
+        if api.game.is_pvp:
+            st["pending"] = {"t": "tiaoxin_sha", "can_hit": can_hit, "who": "me"}
+            api.say("◆ 挑衅　对方请选择是否对挑衅者使用一张杀(回序号),否则被弃置一张牌,0=不出杀")
+            return True
+        
+        sha_c, sha_desc = api.game._ai_find_sha()
         if sha_c and can_hit:
             api.game._hand_out("me", sha_c)
             st["discard"].append(sha_c)
@@ -549,7 +566,13 @@ class Tianyi:
         me_card = sorted(me["hand"], key=lambda x: RANKS.index(x["r"]), reverse=True)[0]
         api.game._hand_out("me", me_card)
         st["discard"].append(me_card)
-        st["pending"] = {"t": "tianyi_respond", "ai_card": me_card, "who": "you"}
+        
+        if api.game.is_pvp:
+            st["pending"] = {"t": "tianyi_respond", "ai_card": me_card, "who": "you", "caster": "me"}
+            api.say("◆ 天义　我已扣置一张手牌，请你选择一张手牌拼点(回序号)")
+            return True
+            
+        st["pending"] = {"t": "tianyi_respond", "ai_card": me_card, "who": "you", "caster": "me"}
         api.say("◆ 天义　我已将一张手牌扣置作为拼点牌，请出一张手牌拼点(回序号)")
         return True
 
@@ -579,8 +602,13 @@ class Tianyi:
 
             if not me["hand"]:
                 api.say(f"◆ 天义　你拼点 {c['s']}{c['r']}{c['n']},对方无手牌,自动获胜")
-                self._settle(api, True)
+                self._settle(api, True, "you")
                 st["pending"] = None
+                return True
+
+            if api.game.is_pvp:
+                st["pending"] = {"t": "tianyi_respond", "ai_card": c, "who": "me", "caster": "you"}
+                api.say("◆ 天义　你已扣置了一张手牌，对方请选择一张手牌拼点(回序号)")
                 return True
 
             me_card = sorted(me["hand"], key=_pt, reverse=True)[0]
@@ -589,7 +617,7 @@ class Tianyi:
 
             api.say(f"◆ 天义　双方同时亮出：你 {c['s']}{c['r']}{c['n']} vs 对手 {me_card['s']}{me_card['r']}{me_card['n']}")
             win = _pt(c) > _pt(me_card)
-            self._settle(api, win)
+            self._settle(api, win, "you")
             st["pending"] = None
             return True
 
@@ -599,38 +627,37 @@ class Tianyi:
                 api.say("◆ 提示　回正确的手牌序号")
                 return True
 
-            you["hand"] = [x for x in you["hand"] if x["i"] != c["i"]]
+            api.me["hand"] = [x for x in api.me["hand"] if x["i"] != c["i"]]
             st["discard"].append(c)
 
             me_card = pending["ai_card"]
-            api.say(f"◆ 天义　双方同时亮出：你 {c['s']}{c['r']}{c['n']} vs 我 {me_card['s']}{me_card['r']}{me_card['n']}")
-
-            ai_win = _pt(me_card) > _pt(c)
-            if ai_win:
-                api.say("◆ 天义　我赢了,本回合无视距离和次数限制")
-                me["tianyi_win"] = True
-                me["tianyi_lose"] = False
-            else:
-                api.say("◆ 天义　我输了,本回合不能出杀")
-                me["tianyi_win"] = False
-                me["tianyi_lose"] = True
-
+            caster = pending.get("caster", "me")
+            
+            c1 = me_card if caster == "you" else c
+            c2 = c if caster == "you" else me_card
+            
+            api.say(f"◆ 天义　双方同时亮出：{c1['s']}{c1['r']}{c1['n']} vs {c2['s']}{c2['r']}{c2['n']}")
+            win = _pt(c1) > _pt(c2)
+            self._settle(api, win, caster)
+            
             st["pending"] = None
-            api.game._resume_ai_if_needed()
+            if not st["over"] and st["turn"] == "me":
+                api.game._resume_ai_if_needed()
             return True
 
         return None
 
-    def _settle(self, api, win):
-        me = api.me
+    def _settle(self, api, win, caster):
+        st = api.state
+        target = st[caster]
         if win:
-            api.say("◆ 天义　你赢了!本回合使用牌无次数无距离限制")
-            me["tianyi_win"] = True
-            me["tianyi_lose"] = False
+            api.say(f"◆ 天义　{'你' if caster == 'you' else '我'}赢了!本回合使用牌无次数无距离限制")
+            target["tianyi_win"] = True
+            target["tianyi_lose"] = False
         else:
-            api.say("◆ 天义　你输了,本回合不能使用杀")
-            me["tianyi_win"] = False
-            me["tianyi_lose"] = True
+            api.say(f"◆ 天义　{'你' if caster == 'you' else '我'}输了,本回合不能使用杀")
+            target["tianyi_win"] = False
+            target["tianyi_lose"] = True
 
 
 @skill("行殇")
@@ -734,6 +761,12 @@ class Fangzhu:
             if me["hp"] > 0:
                 api.say(f"◆ 放逐　你受到伤害，可以令对手翻面并摸{lost_hp}张牌。1=放逐敌人 0=取消")
             return True
+        elif api.game.is_pvp:
+            st = api.state
+            st["pending"] = {"t": "fangzhu_opt", "lost_hp": lost_hp, "who": api.who}
+            if me["hp"] > 0:
+                api.say(f"◆ 放逐　你可以令对手翻面并摸{lost_hp}张牌。1=放逐敌人 0=取消")
+            return True
         else:
             st = api.state
             you_flipped = st.get("flipped_you", False)
@@ -762,9 +795,14 @@ class Fangzhu:
 
         if text == "1":
             st["pending"] = None
-            st["flipped_me"] = True
-            api.say(f"◆ 放逐　你令对手翻面并摸{lost_hp}张牌")
-            api.game.draw("me", lost_hp)
+            if pending.get("who") == "you":
+                st["flipped_me"] = True
+                api.say(f"◆ 放逐　你令对手翻面并摸{lost_hp}张牌")
+                api.game.draw("me", lost_hp)
+            else:
+                st["flipped_you"] = True
+                api.say(f"◆ 放逐　我发动放逐，令你翻面并摸{lost_hp}张牌")
+                api.game.draw("you", lost_hp)
             if api.game._pop_pending_after():
                 return True
             if not st["over"] and st["turn"] == "me":
@@ -920,6 +958,11 @@ class Shensu:
             st["pending"] = {"t": "shensu_opt", "phase": 1, "who": "you"}
             api.say("◆ 神速　你可以跳过摸牌阶段，并视为使用一张无视距离的【杀】。1=发动 0=取消")
             return True
+        elif api.game.is_pvp:
+            st = api.state
+            st["pending"] = {"t": "shensu_opt", "phase": 1, "who": api.who}
+            api.say("◆ 神速　你可以跳过摸牌阶段，并视为使用一张无视距离的【杀】。1=发动 0=取消")
+            return True
         else:
             me["shensu_used_1"] = True
             api.state["jp"]["skip_draw"] = True
@@ -943,6 +986,11 @@ class Shensu:
         if api.who == "you":
             st = api.state
             st["pending"] = {"t": "shensu_opt", "phase": 2, "who": "you"}
+            api.say("◆ 神速　你可以跳过出牌阶段并弃置一张装备牌，视为使用一张无视距离的【杀】。1=发动 0=取消")
+            return True
+        elif api.game.is_pvp:
+            st = api.state
+            st["pending"] = {"t": "shensu_opt", "phase": 2, "who": api.who}
             api.say("◆ 神速　你可以跳过出牌阶段并弃置一张装备牌，视为使用一张无视距离的【杀】。1=发动 0=取消")
             return True
         else:
@@ -970,6 +1018,11 @@ class Shensu:
         if api.who == "you":
             st = api.state
             st["pending"] = {"t": "shensu_opt", "phase": 3, "who": "you"}
+            api.say("◆ 神速　你可以跳过弃牌阶段并翻面，视为使用一张无视距离的【杀】。1=发动 0=取消")
+            return True
+        elif api.game.is_pvp:
+            st = api.state
+            st["pending"] = {"t": "shensu_opt", "phase": 3, "who": api.who}
             api.say("◆ 神速　你可以跳过弃牌阶段并翻面，视为使用一张无视距离的【杀】。1=发动 0=取消")
             return True
         else:

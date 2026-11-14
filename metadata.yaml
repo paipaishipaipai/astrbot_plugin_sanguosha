@@ -1,7 +1,7 @@
 name: astrbot_plugin_sanguosha
 display_name: 三国杀单挑
 short_desc: 纯本地结算的 1v1 三国杀文字对局，支持对战AI与群内双人私聊开房，内置40名武将技能。
-version: "1.5"
+version: "1.5.1"
 author: 鲸鱼
 repo: https://github.com/paipaishipaipai/astrbot_plugin_sanguosha
 desc: |

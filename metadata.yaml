@@ -10,7 +10,7 @@ tags:
   - 对战
 description: 纯本地结算的 1v1 三国杀文字对局插件。支持单人对战AI（带人格吐槽）与群内双人私聊对战。内置40名武将技能，支持无懈链、觉醒技、拼点等复杂机制，不消耗大模型 Token。
 desc: 纯本地代码底层结算的三国杀，不浪费 Token。双人对战带防作弊私聊机制，40将全技能实装。
-version: "1.5"
+version: "1.5.1"
 support_platforms:
   - aiocqhttp
   - qq_official

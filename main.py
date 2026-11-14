@@ -66,7 +66,7 @@ def strip_slash(text: str) -> str:
     return t
 
 
-@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局（省 token 版 + AI 人格联动 + 武将包 + 双人对抗）", "2.6.7")
+@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局（省 token 版 + AI 人格联动 + 武将包 + 双人对抗）", "1.5")
 class SanguoshaPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)

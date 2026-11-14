@@ -1,9 +1,9 @@
-# 【防吞提示】粘贴后请直接删掉这一行！
 # -*- coding: utf-8 -*-
 """三国杀武将数据 + 武将包加载器"""
 
 import os
 import json
+from astrbot.api import logger
 
 D = "锁定技"
 
@@ -118,7 +118,6 @@ SKILL_DESC = {
     "gongxin": "出牌阶段限一次,你可以观看一名其他角色的手牌,然后弃置其中一张红桃牌。",
     "shensu": "你可以跳过摸牌阶段并使用一张杀;跳过出牌阶段并弃置一张装备牌使用一张杀;跳过弃牌阶段并翻面使用一张杀。以上杀均无视距离。",
     "zhengzi": "当你本回合造成了X点伤害后,你回复1点体力值(X为你当前的体力值)。",
-    # 牌堆锦囊与武器
     "tiesuo": "出牌阶段使用。1=横置对手，2=重铸摸一张牌，0=取消。如果双方均处于横置状态，受到属性伤害时将互相传导。",
     "huogong": "出牌阶段，对一名有手牌的角色（或自己）使用。该角色展示一张手牌，然后若你弃置一张与所展示牌相同花色的手牌，则对其造成1点火焰伤害。",
 }
@@ -130,7 +129,7 @@ def _load_one_pack(path: str) -> int:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception as e:
-        print(f"[三国杀][武将包] 读取失败 {path}: {e}")
+        logger.warning(f"[三国杀][武将包] 读取失败 {path}: {e}")
         return 0
 
     added = 0
@@ -147,14 +146,14 @@ def _load_one_pack(path: str) -> int:
         hp = h.get("hp")
         skills = h.get("s")
         if not name or not isinstance(hp, int) or not isinstance(skills, list):
-            print(f"[三国杀][武将包] {pack_name} 字段不全，跳过: {h}")
+            logger.warning(f"[三国杀][武将包] {pack_name} 字段不全，跳过: {h}")
             continue
 
         norm_skills = []
         bad = False
         for s in skills:
             if not isinstance(s, (list, tuple)) or len(s) != 3:
-                print(f"[三国杀][武将包] {name} 技能格式错误: {s}")
+                logger.warning(f"[三国杀][武将包] {name} 技能格式错误: {s}")
                 bad = True
                 break
             norm_skills.append((str(s[0]), str(s[1]), str(s[2])))
@@ -163,17 +162,17 @@ def _load_one_pack(path: str) -> int:
 
         for cn, _timing, key in norm_skills:
             if key not in ENGINE_SKILL_KEYS:
-                print(f"[三国杀][武将包] 警告：{name} 的技能「{cn}」({key}) 未登记描述")
+                logger.warning(f"[三国杀][武将包] 警告：{name} 的技能「{cn}」({key}) 未登记描述")
 
         hero = {"n": str(name), "hp": int(hp), "g": str(h.get("g", "M")), "s": norm_skills}
 
         existing_idx = next((i for i, x in enumerate(HEROES) if x["n"] == hero["n"]), -1)
         if existing_idx >= 0:
             HEROES[existing_idx] = hero
-            print(f"[三国杀][武将包] 覆盖武将: {hero['n']}（来自 {pack_name}）")
+            logger.info(f"[三国杀][武将包] 覆盖武将: {hero['n']}（来自 {pack_name}）")
         else:
             HEROES.append(hero)
-            print(f"[三国杀][武将包] 新增武将: {hero['n']}（来自 {pack_name}）")
+            logger.info(f"[三国杀][武将包] 新增武将: {hero['n']}（来自 {pack_name}）")
         added += 1
     return added
 
@@ -187,5 +186,5 @@ def load_hero_packs(*dirs: str) -> int:
                 continue
             total += _load_one_pack(os.path.join(d, fn))
     if total:
-        print(f"[三国杀][武将包] 加载完成，共 {total} 个武将，当前总武将数 {len(HEROES)}")
+        logger.info(f"[三国杀][武将包] 加载完成，共 {total} 个武将，当前总武将数 {len(HEROES)}")
     return total

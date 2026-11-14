@@ -1,4 +1,3 @@
-# 【防吞提示】粘贴后请直接删掉这一行！
 # -*- coding: utf-8 -*-
 """AstronBot 插件：三国杀 1v1 文字局（省 token 版 + AI 人格联动 + 武将包 + 双人对抗）"""
 
@@ -12,7 +11,7 @@ import traceback
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter, MessageChain
 from astrbot.api.provider import ProviderRequest
-from astrbot.api.star import Context, Star, register
+from astrbot.api.star import Context, Star, StarTools, register
 from astrbot.api.message_components import Plain, At
 
 from .engine import Game, START_WORDS, looks_like_input
@@ -28,7 +27,6 @@ END_REPLY = "行，牌收起来了，这局算你喊停 🔚 想再打就发「/
 NO_GAME_REPLY = "现在没开局啊，牌堆都是干净的。想打就发「/三国杀」"
 
 SLASHES = "/／"
-TIMING_LOG = "/root/data/plugin_data/sanguosha_timing.log"
 
 SPEAK_FIXED = (
     "you_win", "me_win", "you_dying", "me_dying",
@@ -53,7 +51,10 @@ SURRENDER_WORDS = ("投降", "认输", "我投降", "我认输", "认输投降")
 
 def _write_timing(tag: str, text: str, cost_ms: float):
     try:
-        with open(TIMING_LOG, "a", encoding="utf-8") as f:
+        # 修复：使用 StarTools 动态获取数据目录，避免硬编码 /root 导致权限报错
+        data_dir = StarTools.get_data_dir("sanguosha")
+        log_path = os.path.join(str(data_dir), "sanguosha_timing.log")
+        with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"{time.strftime('%m-%d %H:%M:%S')} {tag} {cost_ms:.1f}ms len={len(text)}\n")
     except Exception:
         pass
@@ -66,7 +67,7 @@ def strip_slash(text: str) -> str:
     return t
 
 
-@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局（省 token 版 + AI 人格联动 + 武将包 + 双人对抗）", "1.5.1")
+@register("sanguosha", "鲸鱼", "三国杀 1v1 文字对局（省 token 版 + AI 人格联动 + 武将包 + 双人对抗）", "1.5")
 class SanguoshaPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -86,7 +87,6 @@ class SanguoshaPlugin(Star):
         builtin = os.path.join(here, "hero_packs")
         user = None
         try:
-            from astrbot.api.star import StarTools
             user = os.path.join(str(StarTools.get_data_dir("sanguosha")), "hero_packs")
         except Exception:
             user = None
@@ -562,10 +562,17 @@ class SanguoshaPlugin(Star):
             "聊天规则：用你当前的人设自然回应，不要输出游戏 UI、数字序号。结合局势共情：血少可以嘴硬，血多可以得意。\n"
         )
 
-        if req.prompt:
-            req.prompt = f"{req.prompt}\n\n[隐藏牌局数据]：{inject}"
-        else:
-            req.prompt = inject
+        # 修复：使用官方推荐方式，临时注入而不破坏缓存和上下文
+        try:
+            req.extra_user_content_parts.append(
+                Plain(text=inject).make_as_temp()
+            )
+        except AttributeError:
+            # 兼容老版本
+            if hasattr(req, 'extra_user_content_parts'):
+                req.extra_user_content_parts.append(Plain(text=inject))
+            else:
+                req.system_prompt = (req.system_prompt or "") + inject
 
     async def _get_persona_prompt(self, event: AstrMessageEvent) -> str:
         try:

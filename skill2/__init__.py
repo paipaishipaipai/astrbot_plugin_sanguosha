@@ -15,6 +15,7 @@
 """
 
 import traceback
+from astrbot.api import logger
 
 SKILL_REGISTRY = {}
 _LOADED = False
@@ -47,8 +48,8 @@ def dispatch(game, who, hook, *args, **kwargs):
         try:
             results.append(fn(*args, **kwargs))
         except Exception as e:
-            print(f"[三国杀][skill2] {type(inst).__name__}.{hook} 出错: {e}")
-            traceback.print_exc()
+            logger.error(f"[三国杀][skill2] {type(inst).__name__}.{hook} 出错: {e}")
+            logger.error(traceback.format_exc())
     return results
 
 
@@ -62,8 +63,8 @@ def dispatch_first(game, who, hook, *args, default=None, **kwargs):
             if r is not None:
                 return r
         except Exception as e:
-            print(f"[三国杀][skill2] {type(inst).__name__}.{hook} 出错: {e}")
-            traceback.print_exc()
+            logger.error(f"[三国杀][skill2] {type(inst).__name__}.{hook} 出错: {e}")
+            logger.error(traceback.format_exc())
     return default
 
 
@@ -74,8 +75,8 @@ def import_all_skills():
     try:
         from . import builtin  # noqa: F401
     except Exception as e:
-        print(f"[三国杀][skill2] 加载 builtin 失败: {e}")
-        traceback.print_exc()
+        logger.error(f"[三国杀][skill2] 加载 builtin 失败: {e}")
+        logger.error(traceback.format_exc())
         return
     _LOADED = True
-    print(f"[三国杀][skill2] 已加载 {len(SKILL_REGISTRY)} 种技能")
+    logger.info(f"[三国杀][skill2] 已加载 {len(SKILL_REGISTRY)} 种技能")

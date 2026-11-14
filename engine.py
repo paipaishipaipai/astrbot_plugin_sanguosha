@@ -1,4 +1,3 @@
-# 【防吞提示】粘贴后请直接删掉这一行！
 # -*- coding: utf-8 -*-
 import random
 import re
@@ -635,7 +634,7 @@ class Game:
                 _collect_skill_pending()
             if has(ch, "反馈") and src and (st[src]["hand"] or st[src]["equip"]):
                 sc = st[src]
-                if who == "you":
+                if who == "you" or self.is_pvp:
                     opts = self._build_pick_opts(src)
                     if opts:
                         local_pends.append({"t": "pick_card", "kind": "fankui", "src": src, "who": who})
@@ -654,9 +653,9 @@ class Game:
                 if j["i"] != -1 and j["s"] != "♥":
                     sc = st[src]
                     if len(sc["hand"]) >= 2:
-                        if src == "you":
+                        if src == "you" or self.is_pvp:
                             local_pends.append({"t": "ganglie_pick", "dmg_src": src, "who": src})
-                            self.say("◆ 刚烈　你要弃2张手牌(回2个序号),或回0改为受1点伤害")
+                            self.say("◆ 刚烈　需弃2张手牌(回2个序号),或回0改为受1点伤害")
                         else:
                             cands = sorted(sc["hand"], key=lambda c: 0 if c["n"] not in ("桃", "无懈可击", "杀", "闪", "酒", "火杀", "雷杀") else 1)
                             for c in cands[:2]:
@@ -683,7 +682,7 @@ class Game:
             s2_dispatch(self, src, "on_damage_dealt", SkillAPI(self, src), who, dmg, card, element)
             if st.get("over"): return
             if has(src_ch, "狂骨") and distance(src_ch, ch) <= 1:
-                if src == "you":
+                if src == "you" or self.is_pvp:
                     local_pends.append({"t": "kuanggu", "who": src})
                     self.say("◆ 狂骨　1=回复1点体力 2=摸一张牌")
                 else:
@@ -735,7 +734,7 @@ class Game:
         if not has(ch, "裸衣"): return False
         if not ch["hand"]: return False
         if self.st["over"]: return False
-        if src == "you":
+        if src == "you" or self.is_pvp:
             self.st["pending"] = {"t": "luoyi_opt", "dst": dst, "who": src}
             self.say("◆ 裸衣　可弃一张手牌造成1点额外伤害,1=发动 0=放弃")
             return True
@@ -750,19 +749,18 @@ class Game:
         while True:
             ch = self.st[who]
             if ch["hp"] > 0: break
-            if who == "me":
-                if self.is_pvp:
-                    self.st["pending"] = {"t": "dying", "who": who}; return
+            if who == "me" and not self.is_pvp:
                 if not self._ai_tao():
                     self.st["over"] = "you"
                     self.say("◆ 结算　我阵亡,你赢了"); self._flavor("you_win")
                     return
                 continue
-            cands = [c for c in ch["hand"] if c["n"] in ("桃", "酒") or (has(ch, "急救") and c["s"] in ("♥", "♦") and self.st["turn"] != "you")]
-            can_jiushi = has(ch, "酒诗") and not self.st.get("flipped_you")
+            cands = [c for c in ch["hand"] if c["n"] in ("桃", "酒") or (has(ch, "急救") and c["s"] in ("♥", "♦") and self.st["turn"] != who)]
+            can_jiushi = has(ch, "酒诗") and not self.st.get(f"flipped_{who}")
             if not cands and not can_jiushi:
-                self.st["over"] = "me"
-                self.say("◆ 结算　你阵亡,我赢了"); self._flavor("me_win")
+                winner = other(who)
+                self.st["over"] = winner
+                self.say(f"◆ 结算　{'你' if who == 'you' else '我'}阵亡,{'我' if winner == 'me' else '你'}赢了"); self._flavor("me_win" if winner == "me" else "you_win")
                 return
             self.st["pending"] = {"t": "dying", "who": who}
             return
@@ -839,7 +837,7 @@ class Game:
             self.say(f"◆ 连营　{'你' if who == 'you' else '我'}失去最后手牌,摸1张")
         if equip_removed and has(ch, "旋风"):
             opp = other(who)
-            if who == "you":
+            if who == "you" or self.is_pvp:
                 opts = self._build_pick_opts(opp)
                 if opts:
                     self.st["pending"] = {"t": "pick_card", "kind": "xuanfeng", "src": opp, "remaining": 2, "who": who}
@@ -858,7 +856,7 @@ class Game:
     def _trigger_xuanfeng_discard(self, who, count=2):
         st = self.st; opp = other(who)
         if not self._all_cards(opp): return
-        if who == "you":
+        if who == "you" or self.is_pvp:
             opts = self._build_pick_opts(opp)
             if opts:
                 st["pending"] = {"t": "pick_card", "kind": "xuanfeng", "src": opp, "remaining": count, "who": who, "from_discard": True}
@@ -1061,7 +1059,7 @@ class Game:
             if st["over"]: return
         if has(ch, "英魂") and ch["hp"] < ch["maxhp"]:
             x = ch["maxhp"] - ch["hp"]
-            if who == "you":
+            if who == "you" or self.is_pvp:
                 st["pending"] = {"t": "yinghun", "x": x, "who": who}
                 self.say(f"◆ 英魂　已损失 {x} 点体力,A=令对手摸1弃{x},0=不发动")
                 return
@@ -1078,7 +1076,7 @@ class Game:
             self.say("◆ 英魂　你无牌可弃")
         if has(ch, "观星"):
             top = [self.deck.pop() for _ in range(min(3, len(self.deck)))] if self.deck else []
-            if who == "you":
+            if who == "you" or self.is_pvp:
                 if top:
                     st["pending"] = {"t": "guanxing", "cards": top, "who": who}
                     self.say("◆ 观星　牌堆顶:" + "　".join(f"{i}={c['s']}{c['r']}{c['n']}" for i, c in enumerate(top, 1)) + "　回「顶1 2 3」或「顶1 底2 3」或「底1 2 3」")
@@ -1109,9 +1107,9 @@ class Game:
         if n not in ("乐不思蜀", "兵粮寸断"): return False
         bad = (judge_card["s"] != "♥") if n == "乐不思蜀" else (judge_card["s"] != "♣")
         st["discard"].append(orig_card_obj)
-        if bad and who == "you" and self._wx_in_hand("you"):
-            st["wx"] = {"card": orig_card_obj, "caster": "you", "stack": 0, "judge": True, "label": f"{n}的判定", "apply": (lambda n=n: self._judge_skip(n, True)), "then": self._judge_next}
-            self._wx_step("you"); return True
+        if bad and (who == "you" or self.is_pvp) and self._wx_in_hand(who):
+            st["wx"] = {"card": orig_card_obj, "caster": who, "stack": 0, "judge": True, "label": f"{n}的判定", "apply": (lambda n=n: self._judge_skip(n, True)), "then": self._judge_next}
+            self._wx_step(who); return True
         self._judge_skip(n, bad); return False
     def _judge_next(self):
         st = self.st; jp = st["jp"]; who = jp["who"]; ch = st[who]
@@ -1129,6 +1127,10 @@ class Game:
                 self.say(f"◆ 鬼才　判定 {j['s']}{j['r']}({n}),可打出手牌替换判定,回手牌序号,0=不改")
                 return
             if who == "me" and has(me, "鬼才") and me["hand"]:
+                if self.is_pvp:
+                    st["pending"] = {"t": "guicai_opt", "orig": j, "who": who, "why": n, "orig_card_obj": c}
+                    self.say(f"◆ 鬼才　判定 {j['s']}{j['r']}({n}),可打出手牌替换判定,回手牌序号,0=不改")
+                    return
                 target_suit = None; need_change = False
                 if n == "乐不思蜀" and j["s"] != "♥": target_suit = "♥"; need_change = True
                 elif n == "兵粮寸断" and j["s"] != "♣": target_suit = "♣"; need_change = True
@@ -1165,6 +1167,10 @@ class Game:
             you = st["you"]
             if has(ch, "突袭"):
                 if len(you["hand"]) >= 2 and (len(you["hand"]) >= len(ch["hand"]) or you["hp"] <= 2):
+                    if self.is_pvp:
+                        st["pending"] = {"t": "tuxi_pick", "who": who, "src": "you"}
+                        self.say("◆ 突袭　请选择获得对方一张手牌(回序号),然后摸1张")
+                        return
                     c = random.choice(you["hand"])
                     self._hand_out("you", c); ch["hand"].append(c)
                     self.say(f"◆ 突袭　我不摸牌,获得你一张 {c['s']}{c['r']}{c['n']}")
@@ -1182,12 +1188,12 @@ class Game:
         if self.st.get("pending") or self.st["over"]: return
         if not skip_play:
             if s2_dispatch_first(self, who, "on_play_phase_start", SkillAPI(self, who), default=None): return
-        if who == "me":
+        if who == "me" and not self.is_pvp:
             if skip_play: self._end("me")
             else:
                 self.say("◆ 阶段　进入出牌阶段"); self._ai_play()
             return
-        if skip_play: self._end("you"); return
+        if skip_play: self._end(who); return
         self.say("◆ 阶段　进入出牌阶段")
         self.st["pending"] = None
     def _end(self, who):
@@ -1200,7 +1206,7 @@ class Game:
         if over > 0: self.say("◆ 阶段　进入弃牌阶段")
         discarded_count = 0
         if over > 0:
-            if who == "me":
+            if who == "me" and not self.is_pvp:
                 me_ch = st["me"]; you_ch = st["you"]
                 low_hp = me_ch["hp"] <= 1
                 danger = distance(me_ch, you_ch) <= attack_range(you_ch)
@@ -1244,7 +1250,7 @@ class Game:
         st = self.st; ch = st[who]
         if st.get("pending") or st["over"]: return
         if has(ch, "据守"):
-            if who == "you":
+            if who == "you" or self.is_pvp:
                 st["pending"] = {"t": "jushou_opt", "who": who}
                 self.say("◆ 据守　1=发动(翻面摸4弃1,弃装备则穿戴) 0=放弃")
                 return
@@ -1773,9 +1779,9 @@ class Game:
         fenwei_targeting = ("过河拆桥", "顺手牵羊", "决斗", "火攻", "借刀杀人", "南蛮入侵", "万箭齐发")
         if card["n"] in fenwei_targeting and has(st[target], "奋威") and not st.get(f"fenwei_used_{target}"):
             st[f"fenwei_used_{target}"] = True
-            if target == "you":
-                st["pending"] = {"t": "fenwei_opt", "caster": caster, "card": card, "apply_fn": apply_fn, "who": "you"}
-                self.say(f"◆ 奋威　我对你使用 {card['n']}，你可以取消该锦囊并摸3张牌。1=发动 0=放行")
+            if target == "you" or self.is_pvp:
+                st["pending"] = {"t": "fenwei_opt", "caster": caster, "card": card, "apply_fn": apply_fn, "who": target}
+                self.say(f"◆ 奋威　你可以取消该锦囊并摸3张牌。1=发动 0=放行")
                 return
             else:
                 self.say("◆ 奋威　我发动奋威，取消你的锦囊并摸3张牌")
@@ -1795,6 +1801,18 @@ class Game:
             if wx.get("judge"): self.say(f"◆ 无懈窗口　这次判定对你不利,要出无懈可击作废吗?回序号,0=认了{hint}")
             elif wx["stack"] == 0: self.say(f"◆ 无懈窗口　{who}使出的 {c['s']}{c['r']} {wx['label']},要出无懈可击吗?回序号抵消,0=放行{hint}")
             else: self.say(f"◆ 无懈窗口　我打出了无懈可击,要再反制回去吗?回序号,0=放行{hint}")
+            return
+        if self.is_pvp:
+            if st.get("yijue_you_no_resp") and wx.get("caster") == "you": return self._wx_close()
+            has_wx = bool(self._wx_in_hand("me"))
+            has_jw = has(st["me"], "解围") and self._has_equip_hand("me")
+            if not has_wx and not has_jw: return self._wx_close()
+            st["pending"] = {"t": "wuxie", "who": "me"}
+            c = wx["card"]; who = "我" if wx["caster"] == "me" else "你"
+            hint = "（解围：也可回装备牌序号）" if has_jw else ""
+            if wx.get("judge"): self.say(f"◆ 无懈窗口　这次判定对你不利,要出无懈可击作废吗?回序号,0=认了{hint}")
+            elif wx["stack"] == 0: self.say(f"◆ 无懈窗口　{who}使出的 {c['s']}{c['r']} {wx['label']},要出无懈可击吗?回序号抵消,0=放行{hint}")
+            else: self.say(f"◆ 无懈窗口　对方打出了无懈可击,要再反制回去吗?回序号,0=放行{hint}")
             return
         if st.get("yijue_you_no_resp") and wx.get("caster") == "you": return self._wx_close()
         c = self._ai_wx_choice(wx)
@@ -1906,7 +1924,9 @@ class Game:
         who = p.get("who")
         if who in ("you", "me"): return who
         turn = self.st.get("turn"); opp = self._swap_side(turn)
-        if t in ("wuxie_wugu", "wuxie_wugu_ai", "pick", "tieqi_discard", "cixiong", "jiedao", "huogong_show", "fenwei_opt", "fanjian_guess", "yijue_show", "huogong_target", "huogong_self_show", "zhuque", "tiesuo_target"): return "you"
+        if t == "huogong_show":
+            return p.get("who", "you")
+        if t in ("wuxie_wugu", "wuxie_wugu_ai", "pick", "tieqi_discard", "cixiong", "jiedao", "fenwei_opt", "fanjian_guess", "yijue_show", "huogong_target", "huogong_self_show", "zhuque", "tiesuo_target"): return "you"
         if t == "shan":
             src = p.get("src")
             return self._swap_side(src) if src in ("you", "me") else opp
@@ -2134,6 +2154,10 @@ class Game:
         if n == "借刀杀人":
             if not me["equip"].get("weapon"): self.say("◆ 借刀杀人　对方没有武器,无效"); return
             weapon = me["equip"]["weapon"]
+            if self.is_pvp:
+                st["pending"] = {"t": "jiedao", "who": "me"}
+                self.say(f"◆ 借刀杀人　要求你出杀攻击我，否则交出武器 {weapon['s']}{weapon['r']}{weapon['n']}")
+                return
             can_hit = in_attack_range(me, you) and not (has(you, "空城") and not you["hand"])
             sha_c, sha_desc = self._ai_find_sha() if can_hit else (None, None)
             keep_weapon = weapon["n"] in ("诸葛连弩", "青釭剑", "古锭刀", "贯石斧", "麒麟弓", "方天画戟", "朱雀羽扇") and you["hp"] > 2
@@ -2202,6 +2226,11 @@ class Game:
             self.say(f"◆ 借刀杀人　要求你出杀攻击我,否则交出武器 {w['s']}{w['r']}{w['n']}"); return
         if n == "五谷丰登":
             cards = [self.deck.pop() for _ in range(min(2, len(self.deck)))]
+            if self.is_pvp:
+                st["reveal"] = cards
+                st["pending"] = {"t": "wugu", "cards": cards, "who": "me"}
+                self.say("◆ 出牌　五谷丰登,亮出2张,请对方回1或2取牌")
+                return
             if cards and self._wx_in_hand("you"):
                 st["pending"] = {"t": "wuxie_wugu_ai", "cards": cards, "who": "you"}
                 self.say("◆ 无懈窗口　你可以无懈阻止我获得五谷牌,回无懈序号 0=放行"); return
@@ -2225,6 +2254,14 @@ class Game:
         is_black = card["s"] in ("♠", "♣"); is_attr = card["n"] in ("火杀", "雷杀")
         element = elem_of(card); has_qg = wep(you) == "青釭剑"
         if wep(you) == "雌雄双股剑" and not liyong and self._gender(you) != self._gender(me):
+            if self.is_pvp:
+                times = 2 if has(you, "无双") else 1
+                yj_bonus = 1 if st.get("yijue_you_no_resp") and card["s"] == "♥" else 0
+                dmg = self._calc_dmg(you, me, card) + yj_bonus + _you_dmg_bonus
+                pending_shan = {"t": "shan", "times": times, "dmg": dmg, "qb": armor(me) == "八卦阵" and not has_qg, "src": "you", "card": card, "element": element, "no_shan": False, "reason": "杀", "who": "me"}
+                st["pending"] = {"t": "cixiong", "after": pending_shan, "who": "me"}
+                self.say("◆ 雌雄双股剑　你可以弃一张牌,或让我摸一张。回手牌序号=弃,0=让我摸一张")
+                return
             self._ai_cixiong_choice("me", "you")
             if st.get("pending"): return
         if has(you, "鞬出") and not liyong:
@@ -2281,6 +2318,12 @@ class Game:
                     if st["pending"]: return
                     self._qilin(you)
                     if not st["over"]: self._try_luoyi("you", "me")
+                    return
+                if self.is_pvp:
+                    opts_list = [(i, cc) for i, cc in enumerate(me["hand"], 1) if cc["s"] == suit]
+                    opts_line = "　".join(f"{i}={cc['s']}{cc['r']}{cc['n']}" for i, cc in opts_list)
+                    st["pending"] = {"t": "tieqi_discard", "suit": suit, "after": {"t": "shan", "times": times, "dmg": dmg, "qb": armor(me) == "八卦阵" and not has_qg, "src": "you", "card": card, "element": element, "no_shan": False, "reason": "杀", "who": "me"}, "opts_line": opts_line, "who": "me"}
+                    self.say(f"◆ 铁骑　判定{suit},你需弃一张{suit}的牌才能出闪。可弃: {opts_line}；回序号弃牌,0=不弃直接受伤")
                     return
                 if self._ai_find_shan()[0] is None and armor(me) != "八卦阵":
                     self.say(f"◆ 铁骑　判定{suit},我无闪也无八卦,无法响应")
@@ -2419,7 +2462,7 @@ class Game:
             self.say(f"◆ 选将　已指定敌人武将: {hero['n']} ({hero['hp']}血)"); return self.out()
         if t == "dying":
             if text in ("0", "过", "放弃"):
-                st["over"] = "me"; st["pending"] = None; self.say("◆ 结算　你阵亡,我赢了"); self._flavor("me_win"); return self.out()
+                st["over"] = other(p.get("who", "you")); st["pending"] = None; self.say("◆ 结算　放弃救援,阵亡"); self._flavor("me_win" if st["over"] == "me" else "you_win"); return self.out()
             tu = text.upper()
             if len(tu) == 1 and tu in "ABCDE":
                 hero = you["hero"]
@@ -2480,10 +2523,11 @@ class Game:
         if t == "fenwei_opt":
             card = p["card"]; caster = p["caster"]; apply_fn = p["apply_fn"]; st["pending"] = None
             if text.strip() in ("1", "是", "发动"):
-                self.say("◆ 奋威　你发动奋威，锦囊失效并摸3张牌"); self.draw("you", 3)
-                if st.get("turn") == "me" and not st.get("over"): self._ai_play()
+                self.say("◆ 奋威　发动奋威，锦囊失效并摸3张牌"); self.draw("you" if p.get("who") == "you" else "me", 3)
+                if st.get("turn") == "me" and not st.get("over") and not self.is_pvp: self._ai_play()
+                if self.is_pvp: self._resume_ai_if_needed()
             else:
-                self.say("◆ 奋威　你放弃发动，锦囊继续结算")
+                self.say("◆ 奋威　放弃发动，锦囊继续结算")
                 st["wx"] = {"card": card, "caster": caster, "stack": 0, "apply": apply_fn, "label": card["n"]}
                 self._wx_step("you" if caster == "me" else "me")
             return self.out()
@@ -2512,6 +2556,12 @@ class Game:
                         st["discard"] = [x for x in st["discard"] if x["i"] != p["card"]["i"]]
                         you["hand"].append(p["card"])
                     return self.out()
+                
+                if self.is_pvp:
+                    st["pending"] = {"t": "huogong_show", "card": p["card"], "who": "me"}
+                    self.say("◆ 火攻　请对方展示一张手牌(回序号)")
+                    return self.out()
+                    
                 show = random.choice(me["hand"])
                 self.say(f"◆ 火攻　对方展示 {show['s']}{show['r']}{show['n']}")
                 if not [x for x in you["hand"] if x["s"] == show["s"]]:
@@ -2764,7 +2814,14 @@ class Game:
             if not c: self.say("◆ 提示　回手牌序号"); return self.out()
             if not me["hand"]: self.say("◆ 提示　对方无手牌"); return self.out()
             self._discard("you", c)
-            show = random.choice(me["hand"]); st["yijue_used"] = True
+            st["yijue_used"] = True
+            
+            if self.is_pvp:
+                st["pending"] = {"t": "yijue_show", "ai_card": c, "who": "me"}
+                self.say(f"◆ 义绝　你弃 {c['s']}{c['r']}{c['n']},请对方展示一张手牌(回序号)")
+                return self.out()
+                
+            show = random.choice(me["hand"])
             if show["s"] in ("♠", "♣"):
                 st["yijue_you_no_resp"] = True
                 self.say(f"◆ 义绝　你弃 {c['s']}{c['r']}{c['n']},对手展示 {show['s']}{show['r']}{show['n']}(黑),本回合对方无法响应你的牌，且你的红桃杀伤害+1")
@@ -2775,6 +2832,27 @@ class Game:
         if t == "yijue_show":
             c = self._hand(int(text)) if text.isdigit() else None
             if not c: self.say("◆ 提示　回要展示的手牌序号"); return self.out()
+            
+            if self.is_pvp:
+                self.say(f"◆ 义绝　展示了 {c['s']}{c['r']}{c['n']}")
+                if p.get("who") == "me":
+                    if c["s"] in ("♠", "♣"):
+                        st["yijue_me_no_resp"] = True
+                        self.say(f"◆ 义绝　展示为黑色({c['s']}),本回合对方无法响应你的牌，且你的红桃杀伤害+1")
+                    else:
+                        self._hand_out("you", c); me["hand"].append(c)
+                        self.say(f"◆ 义绝　展示为红色({c['s']}),对方获得 {c['s']}{c['r']}{c['n']}")
+                else:
+                    if c["s"] in ("♠", "♣"):
+                        st["yijue_me_no_resp"] = True
+                        self.say(f"◆ 义绝　展示为黑色({c['s']}),本回合你无法响应他的牌，且他的红桃杀伤害+1")
+                    else:
+                        self._hand_out("you", c); me["hand"].append(c)
+                        self.say(f"◆ 义绝　展示为红色({c['s']}),获得 {c['s']}{c['r']}{c['n']}")
+                st["pending"] = None
+                if not st["over"] and st["turn"] == "me": self._resume_ai_if_needed()
+                return self.out()
+
             self.say(f"◆ 义绝　你展示 {c['s']}{c['r']}{c['n']}")
             if c["s"] in ("♠", "♣"):
                 st["yijue_me_no_resp"] = True
@@ -2815,6 +2893,18 @@ class Game:
         if t == "huogong_show":
             c = self._hand(int(text)) if text.isdigit() else None
             if not c: self.say("◆ 提示　回要展示的手牌序号"); return self.out()
+            
+            if self.is_pvp:
+                self.say(f"◆ 火攻　对方展示了 {c['s']}{c['r']}{c['n']}")
+                if not [x for x in me["hand"] if x["s"] == c["s"]]:
+                    self.say(f"◆ 火攻　你没有{c['s']}花色的牌,火攻无效")
+                    st["pending"] = None
+                    if st["turn"] == "me": self._resume_ai_if_needed()
+                    return self.out()
+                st["pending"] = {"t": "huogong", "suit": c["s"], "card": p["card"], "who": "me", "target": "me"}
+                self.say(f"◆ 火攻　请回你手中同花色({c['s']})的序号弃置(造成1点火焰伤害),0=算了")
+                return self.out()
+
             self.say(f"◆ 火攻　你展示 {c['s']}{c['r']}{c['n']}")
             same = [x for x in me["hand"] if x["s"] == c["s"]]; st["pending"] = None
             if same:
@@ -3000,7 +3090,12 @@ class Game:
         if t == "fanjian":
             c = self._hand(int(text)) if text.isdigit() else None
             if not c: self.say("◆ 提示　回手牌序号"); return self.out()
-            self._hand_out("you", c); guess = random.choice(SUITS); me["hand"].append(c)
+            self._hand_out("you", c)
+            if self.is_pvp:
+                st["pending"] = {"t": "fanjian_guess", "card": c, "who": "me"}
+                self.say("◆ 反间　你扣置了一张手牌，请对方猜花色: 1=♠ 2=♥ 3=♣ 4=♦")
+                return self.out()
+            guess = random.choice(SUITS); me["hand"].append(c)
             if guess != c["s"]: self.say(f"◆ 反间　对手猜 {guess},猜错(实际 {c['s']}),获得这张牌并受1点伤害"); self.hurt("me", 1, "you")
             else: self.say(f"◆ 反间　对手猜 {guess},猜对(实际 {c['s']}),获得这张牌,无伤")
             st["pending"] = None; return self.out()
@@ -3113,6 +3208,12 @@ class Game:
             if duel:
                 p["got"] = p.get("got", 0) + 1; need = p.get("need", 1)
                 if p["got"] < need: self.say(f"◆ 决斗　还需再出 {need - p['got']} 张杀"); return self.out()
+                if self.is_pvp:
+                    p["got"] = 0
+                    p["who"] = "me"
+                    st["pending"] = p
+                    self.say("◆ 决斗　对方打出了杀，轮到你了，请出杀 (0=认输)")
+                    return self.out()
                 if not all(self._ai_sha() for _ in range(p.get("ai_times", 1))):
                     st["pending"] = None; self.say(f"◆ 结算　我没杀,吃 {self._duel_dmg()} 点")
                     self.hurt("me", self._duel_dmg(), "you", card=p.get("card"))
@@ -3141,16 +3242,28 @@ class Game:
             return self.out()
         if t == "wugu":
             if text in ("1", "2") and int(text) <= len(p["cards"]):
-                c = p["cards"][int(text) - 1]; you["hand"].append(c); rest = [r for r in p["cards"] if r["i"] != c["i"]]
-                st["reveal"] = None; self.say(f"◆ 五谷　你取 {c['s']}{c['r']}{c['n']}")
+                c = p["cards"][int(text) - 1]
+                p["who_hand"].append(c) if "who_hand" in p else (you["hand"] if p.get("who") == "you" else me["hand"]).append(c)
+                rest = [r for r in p["cards"] if r["i"] != c["i"]]
+                st["reveal"] = None
+                self.say(f"◆ 五谷　取 {c['s']}{c['r']}{c['n']}")
                 if rest:
-                    if self._wx_in_hand("you"):
+                    if self.is_pvp:
+                        next_who = "me" if p.get("who") == "you" else "you"
+                        st["reveal"] = rest
+                        st["pending"] = {"t": "wugu", "cards": rest, "who": next_who}
+                        self.say("◆ 五谷　请对方取牌,回1取")
+                        return self.out()
+                    if p.get("who") == "you" and self._wx_in_hand("you"):
                         st["pending"] = {"t": "wuxie_wugu", "rest": rest, "who": "you"}
                         self.say("◆ 无懈窗口　你可以无懈阻止我获得剩余五谷牌,回无懈序号 0=放行")
                         return self.out()
-                    for r in rest: me["hand"].append(r)
-                    self.say(f"◆ 五谷　我获得剩余 {len(rest)} 张")
-                st["pending"] = None; return self.out()
+                    (me["hand"] if p.get("who") == "you" else you["hand"]).extend(rest)
+                    self.say(f"◆ 五谷　对方获得剩余 {len(rest)} 张")
+                st["pending"] = None
+                if st.get("turn") == "me" and not st["over"]:
+                    self._resume_ai_if_needed()
+                return self.out()
             self.say("◆ 提示　回1或2"); return self.out()
         if t == "qingnang":
             c = self._hand(int(text)) if text.isdigit() else None
@@ -3179,6 +3292,10 @@ class Game:
             if txt in ("0", "过"): self._normal_draw("you"); self._after_draw("you", p.get("skip_play", False)); return self.out()
             if txt == "A" and len(p["opts"]) >= 1:
                 if p["opts"][0] == "突袭":
+                    if self.is_pvp:
+                        st["pending"] = {"t": "tuxi_pick", "who": "you", "src": "me"}
+                        self.say("◆ 突袭　请选择获得对方一张手牌(回序号)")
+                        return self.out()
                     if me["hand"]:
                         c = random.choice(me["hand"]); self._hand_out("me", c); you["hand"].append(c)
                         self.say(f"◆ 突袭　获得对手一张 {c['s']}{c['r']}{c['n']}"); self.draw("you", 1); self.say("◆ 突袭　再摸1张")
@@ -3194,6 +3311,24 @@ class Game:
                     card = random.choice(me["hand"])
                 self._resolve_take(p["n"], card); return self.out()
             self.say(f"◆ 提示　回1~{len(opts)}选牌"); return self.out()
+        if t == "tuxi_pick":
+            src = p.get("src", "me")
+            taker = p.get("who", "you")
+            c = self._hand(int(text)) if text.isdigit() else None
+            if not c:
+                self.say("◆ 提示　回要获得的手牌序号")
+                return self.out()
+            self._hand_out(src, c)
+            st[taker]["hand"].append(c)
+            self.say(f"◆ 突袭　{taker} 获得 {c['s']}{c['r']}{c['n']}")
+            self.draw(taker, 1)
+            self.say(f"◆ 突袭　{taker} 摸1张")
+            st["pending"] = None
+            if taker == "me":
+                self._after_draw("me", st["jp"]["skip_play"])
+            else:
+                self._after_draw("you", st["jp"]["skip_play"])
+            return self.out()
         st["pending"] = None; return self.out()
     def _qixi_apply(self, c):
         st = self.st
